@@ -9,27 +9,26 @@ const app = express();
 const upload = multer({ dest: 'uploads/' });
 const PORT = process.env.PORT || 3000;
 
-// Simple UI Helper HTML
 app.get('/', (req, res) => {
     res.send(`
         <html>
         <head>
-            <title>Flipkart Cloud Scraper</title>
+            <title>Flipkart Cloud Scraper (RAM Optimized)</title>
             <style>
                 body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; background-color: #f4f4f9; }
                 .container { background: white; padding: 30px; border-radius: 10px; display: inline-block; box-shadow: 0px 4px 10px rgba(0,0,0,0.1); }
                 input[type="file"] { margin: 20px 0; }
-                button { background: #28a745; color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; }
-                button:hover { background: #218838; }
+                button { background: #007bff; color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; }
+                button:hover { background: #0056b3; }
             </style>
         </head>
         <body>
             <div class="container">
-                <h2>Flipkart Automation Cloud Panel ☁️</h2>
-                <p>Upload your <b>links.csv</b> file below:</p>
+                <h2>Flipkart Low-RAM Cloud Panel ☁️⚡</h2>
+                <p>Upload your <b>links.csv</b> file below (512MB Safe Mode):</p>
                 <form action="/scrape" method="POST" enctype="multipart/form-data">
                     <input type="file" name="excelFile" accept=".csv" required><br>
-                    <button type="submit">Start Scraping & Download</button>
+                    <button type="submit">Start Safe Scraping</button>
                 </form>
             </div>
         </body>
@@ -37,7 +36,6 @@ app.get('/', (req, res) => {
     `);
 });
 
-// Main Scraping Endpoint
 app.post('/scrape', upload.single('excelFile'), async (req, res) => {
     if (!req.file) return res.status(400).send('❌ File upload nahi hui.');
 
@@ -51,16 +49,38 @@ app.post('/scrape', upload.single('excelFile'), async (req, res) => {
         return res.status(400).send('❌ Invalid CSV format.');
     }
 
-    // Launching Playwright in headless mode for Cloud Environment
-    console.log("Launching Headless Cloud Chromium...");
+    console.log(`Starting RAM-Optimized Scraping for ${records.length} links...`);
+
+    // Launch single lightweight browser bundle
     const browser = await chromium.launch({
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled']
+        args: [
+            '--no-sandbox', 
+            '--disable-setuid-sandbox', 
+            '--disable-dev-shm-usage', // Memory isolation crash bypass flag
+            '--disable-accelerated-2d-canvas',
+            '--disable-gpu',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process' // Multi-process model bypass to save huge RAM
+        ]
     });
+    
     const context = await browser.newContext({
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
     });
+    
     const page = await context.newPage();
+
+    // CRITICAL MEMORY OPTIMIZATION: Block images, stylesheets and fonts
+    await page.route('**/*', (route) => {
+        const resourceType = route.request().resourceType();
+        if (['image', 'stylesheet', 'font', 'media', 'image_shell'].includes(resourceType)) {
+            route.abort();
+        } else {
+            route.continue();
+        }
+    });
 
     for (const record of records) {
         const url = record.Link || record.url || Object.values(record)[1];
@@ -73,10 +93,13 @@ app.post('/scrape', upload.single('excelFile'), async (req, res) => {
             const pidValue = urlObj.searchParams.get('pid') || '';
             const reviewsDirectUrl = `https://www.flipkart.com/product/product-reviews/itm?pid=${pidValue}&marketplace=FLIPKART`;
             
-            await page.goto(reviewsDirectUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-            await page.waitForTimeout(2000);
+            console.log(`Cloud Processing FSN [${fsn}]`);
+            
+            // Navigate and load text DOM layout only (Super Fast)
+            await page.goto(reviewsDirectUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.waitForTimeout(1000);
 
-            // Matrix Parsing Logic
+            // Matrix Breakdown Parsing
             const finalMetrics = await page.evaluate(() => {
                 const doc = document;
                 const breakdown = { star1: 0, star2: 0, star3: 0, star4: 0, star5: 0, totalRatings: "0", average: "0.0" };
@@ -114,7 +137,7 @@ app.post('/scrape', upload.single('excelFile'), async (req, res) => {
                 return breakdown;
             });
 
-            // Reviews text parsing 
+            // Reviews Parsing
             const reviews = await page.evaluate(() => {
                 const doc = document;
                 if (!doc) return [];
@@ -157,14 +180,14 @@ app.post('/scrape', upload.single('excelFile'), async (req, res) => {
                 });
             }
         } catch (err) {
-            console.error(`Error processing FSN ${fsn}:`, err);
+            console.error(`Error with FSN ${fsn}:`, err);
         }
     }
 
     await browser.close();
-    fs.unlinkSync(req.file.path); // Temp file clear karein
+    fs.unlinkSync(req.file.path); // Uploaded cache link remove karein
 
-    // CSV Respond compiled output data sheets
+    // Compile Results
     if (allExtractedData.length > 0) {
         const headers = ["FSN", "Product_URL", "Average_Rating", "Total_Ratings_Count", "Reviewer_Name", "User_Rating", "Review_Title", "Review_Comment", "5_Star_Total", "4_Star_Total", "3_Star_Total", "2_Star_Total", "1_Star_Total"];
         const csvRows = allExtractedData.map(row => [
