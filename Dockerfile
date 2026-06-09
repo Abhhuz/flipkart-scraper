@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.44.0-jammy
+FROM mcr.microsoft.com/playwright:v1.60.0-jammy
 
 # App directory configuration
 WORKDIR /app
@@ -15,4 +15,3 @@ COPY . .
 # Expose port and boot up sequence
 EXPOSE 3000
 CMD ["npm", "start"]
-
